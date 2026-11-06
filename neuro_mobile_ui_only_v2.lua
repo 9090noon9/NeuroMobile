@@ -1339,7 +1339,7 @@ function Library:Window(Opts)
 	local TabStrip = New("ScrollingFrame", {
 		Name = "TabStrip",
 		Position = UDim2.fromOffset(8, 8),
-		Size = UDim2.new(1, -(SearchW + 27), 0, 21),
+		Size = UDim2.new(1, -(SearchW + 27), 0, 25),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		CanvasSize = UDim2.new(),
@@ -1347,8 +1347,14 @@ function Library:Window(Opts)
 		ScrollingDirection = Enum.ScrollingDirection.X,
 		ScrollBarThickness = 0,
 		ScrollingEnabled = true,
+		Active = true,
+		ClipsDescendants = true,
+		ZIndex = 5,
 		Parent = Panel,
 	})
+	-- Window:Tab is defined outside this constructor, so expose the strip
+	-- on the window instead of relying on this constructor's local variable.
+	Win.TabStrip = TabStrip
 	New("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		HorizontalAlignment = Enum.HorizontalAlignment.Left,
@@ -1412,7 +1418,7 @@ function Library:Window(Opts)
 	function Win:_LayoutTabs()
 		for I, T in self.Tabs do
 			T.Button.LayoutOrder = I
-			T.Button.Size = UDim2.fromOffset(76, 21)
+			T.Button.Size = UDim2.fromOffset(76, 25)
 		end
 		local Layout = TabStrip:FindFirstChildOfClass("UIListLayout")
 		if Layout then
@@ -1480,10 +1486,24 @@ function Window:Tab(Opts)
 	if type(Opts) == "string" then Opts = { Name = Opts } end
 	Opts = Opts or {}
 	local T = setmetatable({ Name = Opts.Name or "Tab", SubTabs = {}, Window = self }, Tab)
-	local Btn, Fill = Box(TabStrip, UDim2.new(), UDim2.fromOffset(76, 21), { "Outline" }, "TextButton")
+	local Strip = self.TabStrip
+	if not Strip or not Strip.Parent then
+		error("NeuroMobile: tab strip is unavailable; create the window before adding tabs.")
+	end
+	local Btn, Fill = Box(Strip, UDim2.new(), UDim2.fromOffset(76, 25), { "Outline" }, "TextButton")
 	ThemeGrad(Fill, "Base", 1, 0.58)
 	T.Button = Btn
-	T.Label = New("TextLabel", { Size = UDim2.fromScale(1, 1), Text = T.Name, TextColor3 = Theme.TextTab, Parent = Fill })
+	T.Label = New("TextLabel", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Text = T.Name,
+		TextColor3 = Theme.TextTab,
+		TextSize = 12,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		ZIndex = 7,
+		Parent = Fill,
+	})
 	T.Container = New("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, Parent = self.Content })
 
 	Btn.MouseButton1Click:Connect(function() self:SelectTab(T) end)
