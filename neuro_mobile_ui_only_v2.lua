@@ -1323,15 +1323,27 @@ function Library:Window(Opts)
 	Bind("Background", function(C) PanelFill.BackgroundColor3 = C end)
 	Win.Panel = Panel
 
-	local _, SFill = Box(Panel, UDim2.new(1, -(SearchW + 17), 0, 7), UDim2.fromOffset(SearchW, 24), { "Inline", "Outline" })
+	local _, SFill = Box(Panel, UDim2.new(1, -(SearchW + 17), 0, 6), UDim2.fromOffset(SearchW, 26), { "Inline", "Outline" })
 	Bind("Background", function(C) SFill.BackgroundColor3 = C end)
 	local Icon = New("ImageLabel", {
 		Position = UDim2.new(0, 5, 0.5, -5), Size = UDim2.fromOffset(10, 10), BackgroundTransparency = 1,
 		Image = "rbxassetid://3926305904", ImageRectOffset = Vector2.new(964, 324), ImageRectSize = Vector2.new(36, 36), Parent = SFill,
 	})
 	local SearchBox = New("TextBox", {
-		Position = UDim2.fromOffset(19, 0), Size = UDim2.new(1, -23, 1, 0), PlaceholderText = "Search..",
-		TextXAlignment = Enum.TextXAlignment.Left, ClipsDescendants = true, Parent = SFill,
+		Name = "SearchInput",
+		Position = UDim2.fromOffset(18, 0),
+		Size = UDim2.new(1, -21, 1, 0),
+		BackgroundTransparency = 1,
+		PlaceholderText = "Search..",
+		Font = Enum.Font.Gotham,
+		TextSize = 14,
+		TextWrapped = false,
+		TextScaled = false,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ClearTextOnFocus = false,
+		ClipsDescendants = false,
+		Parent = SFill,
 	})
 	Bind("Placeholder", function(C) SearchBox.PlaceholderColor3 = C; Icon.ImageColor3 = C end)
 	Bind("Text", function(C) SearchBox.TextColor3 = C end)
