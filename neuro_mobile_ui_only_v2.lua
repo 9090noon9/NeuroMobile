@@ -1323,7 +1323,7 @@ function Library:Window(Opts)
 	Bind("Background", function(C) PanelFill.BackgroundColor3 = C end)
 	Win.Panel = Panel
 
-	local _, SFill = Box(Panel, UDim2.new(1, -(SearchW + 7), 0, 7), UDim2.fromOffset(SearchW, 24), { "Inline", "Outline" })
+	local _, SFill = Box(Panel, UDim2.new(1, -(SearchW + 17), 0, 7), UDim2.fromOffset(SearchW, 24), { "Inline", "Outline" })
 	Bind("Background", function(C) SFill.BackgroundColor3 = C end)
 	local Icon = New("ImageLabel", {
 		Position = UDim2.new(0, 5, 0.5, -5), Size = UDim2.fromOffset(10, 10), BackgroundTransparency = 1,
@@ -1339,7 +1339,7 @@ function Library:Window(Opts)
 	local TabStrip = New("ScrollingFrame", {
 		Name = "TabStrip",
 		Position = UDim2.fromOffset(8, 8),
-		Size = UDim2.new(1, -(SearchW + 27), 0, 25),
+		Size = UDim2.new(1, -(SearchW + 29), 0, 25),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		CanvasSize = UDim2.new(),
@@ -1416,9 +1416,21 @@ function Library:Window(Opts)
 	end
 
 	function Win:_LayoutTabs()
-		for I, T in self.Tabs do
-			T.Button.LayoutOrder = I
-			T.Button.Size = UDim2.fromOffset(76, 25)
+		-- Keep user-created tabs in insertion order and pin Settings to the end.
+		local Order = 0
+		for _, T in self.Tabs do
+			if T.Name ~= "Settings" then
+				Order += 1
+				T.Button.LayoutOrder = Order
+				T.Button.Size = UDim2.fromOffset(76, 25)
+			end
+		end
+		for _, T in self.Tabs do
+			if T.Name == "Settings" then
+				Order += 1
+				T.Button.LayoutOrder = Order
+				T.Button.Size = UDim2.fromOffset(76, 25)
+			end
 		end
 		local Layout = TabStrip:FindFirstChildOfClass("UIListLayout")
 		if Layout then
