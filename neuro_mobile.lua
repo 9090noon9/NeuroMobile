@@ -1243,12 +1243,12 @@ function Library:Window(Opts)
 	if Library.IsMobile then
 		local Cam = workspace.CurrentCamera
 		local VP = Cam and Cam.ViewportSize or Vector2.new(800, 400)
-		W = Opts.Width or math.min(400, VP.X - 24)
-		H = Opts.Height or math.min(280, VP.Y - 72)
-		SearchW = 80
+		W = Opts.Width or math.min(560, VP.X - 24)
+		H = Opts.Height or math.min(300, VP.Y - 72)
+		SearchW = 96
 	end
 	local Win = setmetatable({ Tabs = {}, Searchables = {}, Library = self, Opts = Opts }, Window)
-	self.Window = Win
+	self.ActiveWindow = Win
 
 	local Main = New("Frame", {
 		Name = "Main", Size = UDim2.fromOffset(W, H),
@@ -1342,7 +1342,7 @@ function Library:Window(Opts)
 	Bind("Background", function(C) BFill.BackgroundColor3 = C end)
 	Win.Content = BOuter
 
-	if Library.IsMobile or Opts.ToggleButton then
+	if (Library.IsMobile or Opts.ToggleButton) and not Library._ToggleLabel then
 		local BS = 34
 		local Btn, BtnFill = Box(Gui, UDim2.new(0.3, 0, 0, 44), UDim2.fromOffset(BS, BS), { "Outline", "Inline" })
 		Btn.Name, Btn.ZIndex = "ToggleButton", 100
@@ -1365,12 +1365,12 @@ function Library:Window(Opts)
 			local Moved = false
 			Library._Drag = function()
 				local D = UserInputService:GetMouseLocation() - Start
-				if math.abs(D.X) > 6 or (not Library.HorizontalDragOnly and math.abs(D.Y) > 6) then Moved = true end
-				local VX = Gui.AbsoluteSize.X
-				if VX <= 0 then VX = workspace.CurrentCamera.ViewportSize.X end
-				local X = math.clamp(Orig.X.Scale * VX + Orig.X.Offset + D.X, 0, VX - BS)
-				local DY = Library.HorizontalDragOnly and 0 or D.Y
-				Btn.Position = UDim2.new(0, X, Orig.Y.Scale, Orig.Y.Offset + DY)
+				if math.abs(D.X) > 6 or math.abs(D.Y) > 6 then Moved = true end
+				local VS = Gui.AbsoluteSize
+				if VS.X <= 0 or VS.Y <= 0 then VS = workspace.CurrentCamera.ViewportSize end
+				local X = math.clamp(Orig.X.Scale * VS.X + Orig.X.Offset + D.X, 0, VS.X - BS)
+				local Y = math.clamp(Orig.Y.Scale * VS.Y + Orig.Y.Offset + D.Y, 0, VS.Y - BS)
+				Btn.Position = UDim2.fromOffset(X, Y)
 			end
 			local Conn
 			Conn = I.Changed:Connect(function()
@@ -1382,10 +1382,33 @@ function Library:Window(Opts)
 		end)
 	end
 
+	local TabStrip = New("ScrollingFrame", {
+		Name = "TabStrip", Position = UDim2.new(), Size = UDim2.new(1, -(SearchW + 18), 0, 31),
+		BackgroundTransparency = 1, ClipsDescendants = true, ScrollBarThickness = 0,
+		ScrollingDirection = Enum.ScrollingDirection.X, CanvasSize = UDim2.new(),
+		ElasticBehavior = Enum.ElasticBehavior.Never, Parent = Panel,
+	})
+	Win.TabStrip = TabStrip
+
+	function Win:SetSize(NW, NH)
+		NW, NH = math.floor(NW), math.floor(NH)
+		if NW == W and NH == H then return end
+		local P = Main.Position
+		Main.Position = UDim2.new(P.X.Scale, P.X.Offset - (NW - W) / 2, P.Y.Scale, P.Y.Offset - (NH - H) / 2)
+		W, H = NW, NH
+		Main.Size = UDim2.fromOffset(W, H)
+		self:_LayoutTabs()
+	end
+
 	function Win:_LayoutTabs()
+		local Ordered = {}
+		for _, T in self.Tabs do if not T.IsSettings then table.insert(Ordered, T) end end
+		for _, T in self.Tabs do if T.IsSettings then table.insert(Ordered, T) end end
+		self.Tabs = Ordered
 		local N = #self.Tabs
-		local Area = (W - 14) - (SearchW + 19)
-		local TW = math.floor((Area - 4 * (N - 1)) / N)
+		local Area = (W - 14) - (SearchW + 25)
+		local TW = math.max(math.floor((Area - 4 * (N - 1)) / N), Library.IsMobile and 58 or 40)
+		TabStrip.CanvasSize = UDim2.fromOffset(8 + N * (TW + 4), 0)
 		for I, T in self.Tabs do
 			T.Button.Position = UDim2.fromOffset(8 + (I - 1) * (TW + 4), 8)
 			T.Button.Size = UDim2.fromOffset(TW, 21)
@@ -1444,6 +1467,11 @@ function Window:SelectTab(T)
 		X.Label.TextColor3 = A and Theme.Accent or Theme.TextTab
 	end
 	self.Active = T
+	local Strip = self.TabStrip
+	if Strip and T.Button then
+		local X = T.Button.Position.X.Offset - (Strip.AbsoluteSize.X - T.Button.Size.X.Offset) / 2
+		Strip.CanvasPosition = Vector2.new(math.max(0, X), 0)
+	end
 	Library:ClosePopup()
 	self:_Research()
 end
@@ -1452,7 +1480,7 @@ function Window:Tab(Opts)
 	if type(Opts) == "string" then Opts = { Name = Opts } end
 	Opts = Opts or {}
 	local T = setmetatable({ Name = Opts.Name or "Tab", SubTabs = {}, Window = self }, Tab)
-	local Btn, Fill = Box(self.Panel, UDim2.new(), UDim2.fromOffset(66, 21), { "Outline" }, "TextButton")
+	local Btn, Fill = Box(self.TabStrip, UDim2.new(), UDim2.fromOffset(66, 21), { "Outline" }, "TextButton")
 	ThemeGrad(Fill, "Base", 1, 0.58)
 	T.Button = Btn
 	T.Label = New("TextLabel", { Size = UDim2.fromScale(1, 1), Text = T.Name, TextColor3 = Theme.TextTab, Parent = Fill })
@@ -1476,7 +1504,7 @@ function Window:SetVisible(V)
 end
 
 function Library:Toggle()
-	if self.Window then self.Window:SetVisible(not self.Window.Main.Visible) end
+	if self.ActiveWindow then self.ActiveWindow:SetVisible(not self.ActiveWindow.Main.Visible) end
 end
 
 function Library:Unload()
@@ -1629,6 +1657,8 @@ end
 function Library:SettingsTab(Win, Opts)
 	Opts = Opts or {}
 	local T = Win:Tab({ Name = Opts.Name or "Settings" })
+	T.IsSettings = true
+	Win:_LayoutTabs()
 
 	local Cfg = T:Section({ Name = "Configs", Side = "Left" })
 	local List = Cfg:List({ Name = "Configs", Height = 250, Options = self:GetConfigs(), Flag = "__ConfigList", Save = false })
@@ -1694,6 +1724,12 @@ function Library:SettingsTab(Win, Opts)
 	UI:Slider({ Name = "Rainbow Speed", Flag = "RainbowSpeed", Min = 0, Max = 0.05, Default = self.RainbowSpeed, Decimals = 3,
 		Callback = function(V) self.RainbowSpeed = V end })
 	UI:Separator()
+	UI:Label({ Text = "[!] Changing the UI size may mess up the layout. Reset it if anything looks broken.", Risky = true })
+	UI:Slider({ Name = "UI Width", Flag = "UIWidth", Min = 360, Max = 900, Default = Win.Main.Size.X.Offset, Suffix = "px",
+		Callback = function(V) Win:SetSize(V, Win.Main.Size.Y.Offset) end })
+	UI:Slider({ Name = "UI Height", Flag = "UIHeight", Min = 220, Max = 700, Default = Win.Main.Size.Y.Offset, Suffix = "px",
+		Callback = function(V) Win:SetSize(Win.Main.Size.X.Offset, V) end })
+	UI:Separator()
 	UI:Toggle({ Name = "Anti AFK Kick", Flag = "AntiAFK" })
 	UI:Toggle({ Name = "Show ESP Preview", Flag = "ShowESPPreview", Callback = Opts.OnESPPreview })
 	UI:Separator()
@@ -1716,143 +1752,5 @@ function Library:SettingsTab(Win, Opts)
 end
 
 
-local Win = Library:Window({ Title = "neuro.net", Version = "V3", Game = "Hood Customs" })
-
-local Combat   = Win:Tab({ Name = "Combat" })
-local Autokill = Win:Tab({ Name = "Autokill" })
-local Visuals  = Win:Tab({ Name = "Visuals" })
-local Utility  = Win:Tab({ Name = "Utility" })
-local Legit    = Win:Tab({ Name = "Legit" })
-
-local Forcehit    = Combat:SubTab({ Name = "Forcehit" })
-local Weapons     = Combat:SubTab({ Name = "Weapons" })
-local Positioning = Combat:SubTab({ Name = "Positioning" })
-
-local FH = Forcehit:Section({ Name = "Forcehit", Side = "Left" })
-FH:Toggle({ Name = "Enable", Flag = "Forcehit", Default = true }):AddKeybind({ Mode = "Toggle" })
-FH:Toggle({ Name = "Auto Select", Flag = "AutoSelect" }):AddKeybind({ Mode = "Toggle" })
-FH:Toggle({ Name = "Multi Target", Flag = "MultiTarget" })
-FH:Toggle({ Name = "Face Target", Flag = "FaceTarget" })
-FH:Toggle({ Name = "Auto Stomp", Flag = "AutoStomp" })
-FH:Toggle({ Name = "Equip DB On Respawn", Flag = "EquipDB" })
-FH:Toggle({ Name = "HUD", Flag = "HUD" }):AddColorpicker({ Default = Color3.fromHex("b9d0fa") })
-FH:Dropdown({ Name = "Hit Part", Flag = "HitPart", Options = { "Head", "HumanoidRootPart", "UpperTorso", "LowerTorso", "Closest" }, Default = "Head" })
-FH:Toggle({ Name = "Teleport Autokill", Flag = "TeleportAutokill" })
-
-local IOL = Forcehit:Section({ Name = "Increase Origin Limit", Side = "Left", Risky = true })
-local OriginOn = IOL:Toggle({ Name = "Enable", Flag = "OriginLimit", Default = true })
-IOL:Dropdown({ Name = "Mode", Flag = "OriginMode", Options = { "Send Rate", "Teleport" }, Default = "Send Rate", Dependency = OriginOn })
-
-local FPR = Forcehit:Section({ Name = "Fake Position Resolver", Side = "Left" })
-local ResolverOn = FPR:Toggle({ Name = "Enable", Flag = "Resolver", Default = true })
-FPR:Toggle({ Name = "Wait For Shot", Flag = "ResolverWait", Default = true, Dependency = ResolverOn })
-
-local KA = Forcehit:Section({ Name = "Kill Aura", Side = "Left" })
-local KillAuraOn = KA:Toggle({ Name = "Enable", Flag = "KillAura", Default = true })
-KA:Slider({ Name = "Range", Flag = "KillAuraRange", Min = 0, Max = 300, Default = 100, Dependency = KillAuraOn })
-
-local PF = Forcehit:Section({ Name = "Prefire", Side = "Left" })
-PF:Toggle({ Name = "Prefire", Flag = "Prefire", Default = true })
-
-local Filters = Forcehit:Section({ Name = "Filters", Side = "Right" })
-Filters:Toggle({ Name = "KO", Flag = "FilterKO", Default = true })
-Filters:Toggle({ Name = "Force Field", Flag = "FilterFF", Default = true })
-local Dist = Filters:Toggle({ Name = "Distance", Flag = "FilterDistance", Default = true })
-Filters:Slider({ Name = "Max Distance", Flag = "MaxDistance", Min = 0, Max = 1000, Default = 660, Dependency = Dist })
-Filters:Toggle({ Name = "Wall", Flag = "FilterWall", Default = true })
-Filters:Toggle({ Name = "In Box", Flag = "FilterInBox" })
-Filters:Toggle({ Name = "Hit/Miss Logs", Flag = "HitLogs" }):AddColorpicker({ Default = Color3.fromHex("b9d0fa") })
-Filters:Toggle({ Name = "Self-Inflict Logs", Flag = "SelfLogs" })
-
-local Target = Forcehit:Section({ Name = "Target", Side = "Right" })
-Target:Toggle({ Name = "Tracer", Flag = "Tracer" })
-	:AddColorpicker({ Default = Color3.fromHex("b9d0fa") })
-	:AddColorpicker({ Default = Color3.new(0, 0, 0) })
-Target:Dropdown({ Name = "Tracer Origin", Flag = "TracerOrigin", Options = { "Mouse", "Gun", "Screen Bottom", "Screen Center" }, Default = "Mouse" })
-Target:Toggle({ Name = "Highlight Target", Flag = "HighlightTarget" }):AddColorpicker({ Default = Color3.fromHex("b9d0fa") })
-Target:Toggle({ Name = "Highlight Fill", Flag = "HighlightFill" }):AddColorpicker({ Default = Color3.fromHex("b9d0fa"), Alpha = 0.5 })
-Target:Toggle({ Name = "Ammo Indicator", Flag = "AmmoIndicator" }):AddColorpicker({ Default = Color3.fromHex("7a8aa8") })
-
-local Gun = Weapons:Section({ Name = "Gun", Side = "Left" })
-Gun:Toggle({ Name = "Rapid Fire", Flag = "RapidFire" })
-Gun:Toggle({ Name = "No Shoot Animation", Flag = "NoShootAnim" })
-Gun:Toggle({ Name = "No Muzzle Flash", Flag = "NoMuzzle" })
-Gun:Toggle({ Name = "Magic Bullet", Flag = "MagicBullet" })
-local Knife = Weapons:Section({ Name = "Knife", Side = "Left" })
-Knife:Toggle({ Name = "Mod Throw Knife", Flag = "ModThrowKnife" })
-local Wallbang = Weapons:Section({ Name = "Wallbang", Side = "Right", Risky = true })
-Wallbang:Toggle({ Name = "Gun", Flag = "WallbangGun" })
-Wallbang:Toggle({ Name = "Throwables", Flag = "WallbangThrow" })
-local KnifeHB = Weapons:Section({ Name = "Knife Hitbox", Side = "Right" })
-KnifeHB:Toggle({ Name = "Enable", Flag = "KnifeHitbox" })
-
-local Behavior   = Autokill:SubTab({ Name = "Behavior" })
-local StompVoid  = Autokill:SubTab({ Name = "Stomp & Void" })
-local Prediction = Autokill:SubTab({ Name = "Prediction" })
-
-local AK = Behavior:Section({ Name = "Autokill", Side = "Left" })
-AK:Toggle({ Name = "Enable", Flag = "Autokill" }):AddKeybind({ Mode = "Toggle" })
-AK:Toggle({ Name = "Mouse Select", Flag = "MouseSelect" }):AddKeybind({ Mode = "Toggle" })
-AK:Toggle({ Name = "Status Text", Flag = "StatusText", Default = true }):AddColorpicker({ Default = Color3.fromHex("e6e6e6") })
-AK:Dropdown({ Name = "Target Priority", Flag = "TargetPriority", Options = { "Selected", "Closest", "Lowest Health" }, Default = "Selected" })
-AK:Toggle({ Name = "Glue Detection", Flag = "GlueDetection" })
-AK:Toggle({ Name = "Fake Position Detection", Flag = "FakePosDetection" })
-AK:Dropdown({ Name = "Mode", Flag = "AutokillMode", Options = { "Double Barrel", "Revolver", "Knife" }, Default = "Double Barrel" })
-AK:Toggle({ Name = "Spectate", Flag = "Spectate", Default = true })
-AK:Toggle({ Name = "Target HUD", Flag = "TargetHUD" })
-AK:Toggle({ Name = "Visualize Character", Flag = "VisualizeChar" })
-AK:Dropdown({ Name = "Movement", Flag = "Movement", Options = { "Behind", "Above", "Orbit", "Under" }, Default = "Behind" })
-AK:Slider({ Name = "Behind Distance", Flag = "BehindDistance", Min = -5, Max = 12, Default = 5 })
-AK:Slider({ Name = "Follow Height", Flag = "FollowHeight", Min = -10, Max = 20, Default = 0 })
-
-local PL = Behavior:Section({ Name = "Players", Side = "Right" })
-PL:PlayerList({ Height = 420, Flag = "AutokillTarget" })
-
-StompVoid:Section({ Name = "Stomp", Side = "Left" }):Toggle({ Name = "Auto Stomp", Flag = "AKStomp" })
-StompVoid:Section({ Name = "Void", Side = "Right" }):Toggle({ Name = "Void Target", Flag = "AKVoid", Risky = true })
-Prediction:Section({ Name = "Prediction", Side = "Left" }):Slider({ Name = "Amount", Flag = "PredAmount", Min = 0, Max = 1, Default = 0.13, Decimals = 2 })
-
-local ESP = Visuals:Section({ Name = "ESP", Side = "Left" })
-local ESPOn = ESP:Toggle({ Name = "Enable", Flag = "ESP" })
-ESP:Toggle({ Name = "Box", Flag = "ESPBox", Dependency = ESPOn }):AddColorpicker({ Default = Color3.new(1, 1, 1) })
-ESP:Toggle({ Name = "Name", Flag = "ESPName", Dependency = ESPOn }):AddColorpicker({ Default = Color3.new(1, 1, 1) })
-ESP:Toggle({ Name = "Health Bar", Flag = "ESPHealth", Dependency = ESPOn }):AddColorpicker({ Default = Color3.fromRGB(80, 255, 120) })
-ESP:Dropdown({ Name = "Flags", Flag = "ESPFlags", Multi = true, Options = { "Distance", "Weapon", "Armor", "Cash" }, Default = { "Distance" }, Dependency = ESPOn })
-
-local Misc = Utility:Section({ Name = "Chat", Side = "Left" })
-Misc:Toggle({ Name = "Trashtalk", Flag = "Trashtalk" })
-Misc:Textbox({ Name = "Message", Flag = "TrashtalkMsg", Placeholder = "Type a message.." })
-
-local SA = Legit:Section({ Name = "Silent Aim", Side = "Left" })
-SA:Toggle({ Name = "Enable", Flag = "SilentAim" }):AddKeybind({ Mode = "Toggle" })
-SA:Toggle({ Name = "Show FOV", Flag = "ShowFOV" })
-SA:Toggle({ Name = "Visible Check", Flag = "SAVisible" })
-SA:Toggle({ Name = "Closest Part", Flag = "ClosestPart" })
-SA:Toggle({ Name = "Closest Point", Flag = "ClosestPoint" })
-SA:Toggle({ Name = "Visualize Target", Flag = "VisualizeTarget" }):AddColorpicker({ Default = Color3.fromHex("b9d0fa") })
-local GE = Legit:Section({ Name = "Gun Exploits", Side = "Left" })
-GE:Toggle({ Name = "No Recoil", Flag = "NoRecoil" })
-GE:Toggle({ Name = "Full Auto", Flag = "FullAuto" })
-GE:Toggle({ Name = "Anti Aimviewer", Flag = "AntiAimviewer" })
-local CL = Legit:Section({ Name = "Camlock", Side = "Right" })
-CL:Toggle({ Name = "Enable", Flag = "Camlock" }):AddKeybind({ Mode = "Hold" })
-CL:Toggle({ Name = "Auto Prediction", Flag = "CamlockAutoPred" })
-CL:Toggle({ Name = "Smoothing", Flag = "CamlockSmooth" })
-CL:Toggle({ Name = "Prediction", Flag = "CamlockPred" })
-CL:Toggle({ Name = "Visible Check", Flag = "CamlockVisible" })
-local TB = Legit:Section({ Name = "Triggerbot", Side = "Right" })
-TB:Toggle({ Name = "Enable", Flag = "Triggerbot" }):AddKeybind({ Mode = "Hold" })
-TB:Toggle({ Name = "Wall Check", Flag = "TBWall", Default = true })
-TB:Toggle({ Name = "Head Only", Flag = "TBHead" })
-TB:Toggle({ Name = "Force Field Check", Flag = "TBFF", Default = true })
-TB:Toggle({ Name = "Use Delay", Flag = "TBDelay", Default = true })
-
-Library:SettingsTab(Win, {
-	Game = "Hood Customs",
-	License = ":3",
-	Credits = { "- @baviolie" },
-})
-
-Library:Notify("neuro.net loaded", 3)
 
 return Library
