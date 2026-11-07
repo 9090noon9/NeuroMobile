@@ -20,7 +20,7 @@ local Library = {
 	MenuKey       = Enum.KeyCode.RightShift,
 	TweenTime     = 0.3,
 	RainbowSpeed  = 0.002,
-	NotifyPosition = "Top Right",
+	NotifyPosition = "Top Center",
 	Open          = true,
 	_Keybinds     = {},
 	_Rainbows     = {},
@@ -28,7 +28,7 @@ local Library = {
 	_Drag         = nil,
 	_Listening    = nil,
 	IsMobile      = UserInputService.TouchEnabled,
-	HorizontalDragOnly = false,
+	HorizontalDragOnly = UserInputService.TouchEnabled,
 	_ToggleLabel  = nil,
 }
 
@@ -1243,12 +1243,12 @@ function Library:Window(Opts)
 	if Library.IsMobile then
 		local Cam = workspace.CurrentCamera
 		local VP = Cam and Cam.ViewportSize or Vector2.new(800, 400)
-		W = Opts.Width or math.max(280, math.min(520, VP.X - 16))
-		H = Opts.Height or math.max(220, math.min(320, VP.Y - 48))
+		W = Opts.Width or math.min(500, VP.X - 24)
+		H = Opts.Height or math.min(300, VP.Y - 72)
 		SearchW = 80
 	end
 	local Win = setmetatable({ Tabs = {}, Searchables = {}, Library = self, Opts = Opts }, Window)
-	self.Window = Win
+	self.ActiveWindow = Win
 
 	local Main = New("Frame", {
 		Name = "Main", Size = UDim2.fromOffset(W, H),
@@ -1323,58 +1323,18 @@ function Library:Window(Opts)
 	Bind("Background", function(C) PanelFill.BackgroundColor3 = C end)
 	Win.Panel = Panel
 
-	local _, SFill = Box(Panel, UDim2.new(1, -(SearchW + 17), 0, 6), UDim2.fromOffset(SearchW, 26), { "Inline", "Outline" })
+	local _, SFill = Box(Panel, UDim2.new(1, -(SearchW + 7), 0, 7), UDim2.fromOffset(SearchW, 24), { "Inline", "Outline" })
 	Bind("Background", function(C) SFill.BackgroundColor3 = C end)
 	local Icon = New("ImageLabel", {
 		Position = UDim2.new(0, 5, 0.5, -5), Size = UDim2.fromOffset(10, 10), BackgroundTransparency = 1,
 		Image = "rbxassetid://3926305904", ImageRectOffset = Vector2.new(964, 324), ImageRectSize = Vector2.new(36, 36), Parent = SFill,
 	})
 	local SearchBox = New("TextBox", {
-		Name = "SearchInput",
-		Position = UDim2.fromOffset(18, 0),
-		Size = UDim2.new(1, -21, 1, 0),
-		BackgroundTransparency = 1,
-		PlaceholderText = "Search..",
-		Font = Enum.Font.Gotham,
-		TextSize = 14,
-		TextWrapped = false,
-		TextScaled = false,
-		TextYAlignment = Enum.TextYAlignment.Center,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		ClearTextOnFocus = false,
-		ClipsDescendants = false,
-		Parent = SFill,
+		Position = UDim2.fromOffset(19, 0), Size = UDim2.new(1, -23, 1, 0), PlaceholderText = "Search..",
+		TextXAlignment = Enum.TextXAlignment.Left, ClipsDescendants = true, Parent = SFill,
 	})
 	Bind("Placeholder", function(C) SearchBox.PlaceholderColor3 = C; Icon.ImageColor3 = C end)
 	Bind("Text", function(C) SearchBox.TextColor3 = C end)
-
-	local TabStrip = New("ScrollingFrame", {
-		Name = "TabStrip",
-		Position = UDim2.fromOffset(8, 8),
-		Size = UDim2.new(1, -(SearchW + 29), 0, 25),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.X,
-		ScrollingDirection = Enum.ScrollingDirection.X,
-		ScrollBarThickness = 0,
-		ScrollingEnabled = true,
-		Active = true,
-		ClipsDescendants = true,
-		ZIndex = 5,
-		Parent = Panel,
-	})
-	-- Window:Tab is defined outside this constructor, so expose the strip
-	-- on the window instead of relying on this constructor's local variable.
-	Win.TabStrip = TabStrip
-	New("UIListLayout", {
-		FillDirection = Enum.FillDirection.Horizontal,
-		HorizontalAlignment = Enum.HorizontalAlignment.Left,
-		VerticalAlignment = Enum.VerticalAlignment.Center,
-		Padding = UDim.new(0, 4),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = TabStrip,
-	})
 
 	local _, AFill = Box(Main, UDim2.fromOffset(14, 52), UDim2.new(1, -28, 1, -66), { "Inline", "Outline" })
 	Bind("Background", function(C) AFill.BackgroundColor3 = C end)
@@ -1382,7 +1342,7 @@ function Library:Window(Opts)
 	Bind("Background", function(C) BFill.BackgroundColor3 = C end)
 	Win.Content = BOuter
 
-	if Library.IsMobile or Opts.ToggleButton then
+	if (Library.IsMobile or Opts.ToggleButton) and not Library._ToggleLabel then
 		local BS = 34
 		local Btn, BtnFill = Box(Gui, UDim2.new(0.3, 0, 0, 44), UDim2.fromOffset(BS, BS), { "Outline", "Inline" })
 		Btn.Name, Btn.ZIndex = "ToggleButton", 100
@@ -1405,16 +1365,11 @@ function Library:Window(Opts)
 			local Moved = false
 			Library._Drag = function()
 				local D = UserInputService:GetMouseLocation() - Start
-				if math.abs(D.X) > 6 or (not Library.HorizontalDragOnly and math.abs(D.Y) > 6) then Moved = true end
-				local View = Gui.AbsoluteSize
-				if View.X <= 0 or View.Y <= 0 then
-					local Cam = workspace.CurrentCamera
-					View = Cam and Cam.ViewportSize or Vector2.new(800, 600)
-				end
-				local X0 = Orig.X.Scale * View.X + Orig.X.Offset + D.X
-				local Y0 = Orig.Y.Scale * View.Y + Orig.Y.Offset + D.Y
-				local X = math.clamp(X0, 0, math.max(0, View.X - BS))
-				local Y = math.clamp(Y0, 0, math.max(0, View.Y - BS))
+				if math.abs(D.X) > 6 or math.abs(D.Y) > 6 then Moved = true end
+				local VS = Gui.AbsoluteSize
+				if VS.X <= 0 or VS.Y <= 0 then VS = workspace.CurrentCamera.ViewportSize end
+				local X = math.clamp(Orig.X.Scale * VS.X + Orig.X.Offset + D.X, 0, VS.X - BS)
+				local Y = math.clamp(Orig.Y.Scale * VS.Y + Orig.Y.Offset + D.Y, 0, VS.Y - BS)
 				Btn.Position = UDim2.fromOffset(X, Y)
 			end
 			local Conn
@@ -1427,26 +1382,26 @@ function Library:Window(Opts)
 		end)
 	end
 
+	local TabStrip = New("ScrollingFrame", {
+		Name = "TabStrip", Position = UDim2.new(), Size = UDim2.new(1, -(SearchW + 12), 0, 31),
+		BackgroundTransparency = 1, ClipsDescendants = true, ScrollBarThickness = 0,
+		ScrollingDirection = Enum.ScrollingDirection.X, CanvasSize = UDim2.new(),
+		ElasticBehavior = Enum.ElasticBehavior.Never, Parent = Panel,
+	})
+	Win.TabStrip = TabStrip
+
 	function Win:_LayoutTabs()
-		-- Keep user-created tabs in insertion order and pin Settings to the end.
-		local Order = 0
-		for _, T in self.Tabs do
-			if T.Name ~= "Settings" then
-				Order += 1
-				T.Button.LayoutOrder = Order
-				T.Button.Size = UDim2.fromOffset(76, 25)
-			end
-		end
-		for _, T in self.Tabs do
-			if T.Name == "Settings" then
-				Order += 1
-				T.Button.LayoutOrder = Order
-				T.Button.Size = UDim2.fromOffset(76, 25)
-			end
-		end
-		local Layout = TabStrip:FindFirstChildOfClass("UIListLayout")
-		if Layout then
-			TabStrip.CanvasSize = UDim2.fromOffset(Layout.AbsoluteContentSize.X, 0)
+		local Ordered = {}
+		for _, T in self.Tabs do if not T.IsSettings then table.insert(Ordered, T) end end
+		for _, T in self.Tabs do if T.IsSettings then table.insert(Ordered, T) end end
+		self.Tabs = Ordered
+		local N = #self.Tabs
+		local Area = (W - 14) - (SearchW + 19)
+		local TW = math.max(math.floor((Area - 4 * (N - 1)) / N), Library.IsMobile and 58 or 40)
+		TabStrip.CanvasSize = UDim2.fromOffset(8 + N * (TW + 4), 0)
+		for I, T in self.Tabs do
+			T.Button.Position = UDim2.fromOffset(8 + (I - 1) * (TW + 4), 8)
+			T.Button.Size = UDim2.fromOffset(TW, 21)
 		end
 	end
 
@@ -1502,6 +1457,11 @@ function Window:SelectTab(T)
 		X.Label.TextColor3 = A and Theme.Accent or Theme.TextTab
 	end
 	self.Active = T
+	local Strip = self.TabStrip
+	if Strip and T.Button then
+		local X = T.Button.Position.X.Offset - (Strip.AbsoluteSize.X - T.Button.Size.X.Offset) / 2
+		Strip.CanvasPosition = Vector2.new(math.max(0, X), 0)
+	end
 	Library:ClosePopup()
 	self:_Research()
 end
@@ -1510,24 +1470,10 @@ function Window:Tab(Opts)
 	if type(Opts) == "string" then Opts = { Name = Opts } end
 	Opts = Opts or {}
 	local T = setmetatable({ Name = Opts.Name or "Tab", SubTabs = {}, Window = self }, Tab)
-	local Strip = self.TabStrip
-	if not Strip or not Strip.Parent then
-		error("NeuroMobile: tab strip is unavailable; create the window before adding tabs.")
-	end
-	local Btn, Fill = Box(Strip, UDim2.new(), UDim2.fromOffset(76, 25), { "Outline" }, "TextButton")
+	local Btn, Fill = Box(self.TabStrip, UDim2.new(), UDim2.fromOffset(66, 21), { "Outline" }, "TextButton")
 	ThemeGrad(Fill, "Base", 1, 0.58)
 	T.Button = Btn
-	T.Label = New("TextLabel", {
-		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		Text = T.Name,
-		TextColor3 = Theme.TextTab,
-		TextSize = 12,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		ZIndex = 7,
-		Parent = Fill,
-	})
+	T.Label = New("TextLabel", { Size = UDim2.fromScale(1, 1), Text = T.Name, TextColor3 = Theme.TextTab, Parent = Fill })
 	T.Container = New("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, Parent = self.Content })
 
 	Btn.MouseButton1Click:Connect(function() self:SelectTab(T) end)
@@ -1548,7 +1494,7 @@ function Window:SetVisible(V)
 end
 
 function Library:Toggle()
-	if self.Window then self.Window:SetVisible(not self.Window.Main.Visible) end
+	if self.ActiveWindow then self.ActiveWindow:SetVisible(not self.ActiveWindow.Main.Visible) end
 end
 
 function Library:Unload()
@@ -1575,24 +1521,17 @@ local function FloatBox(Parent, Order)
 end
 
 local NotifyAlign = {
-	["Top Left"]     = { Enum.HorizontalAlignment.Left,  Enum.VerticalAlignment.Top },
-	["Top Right"]    = { Enum.HorizontalAlignment.Right, Enum.VerticalAlignment.Top },
-	["Bottom Left"]  = { Enum.HorizontalAlignment.Left,  Enum.VerticalAlignment.Bottom },
-	["Bottom Right"] = { Enum.HorizontalAlignment.Right, Enum.VerticalAlignment.Bottom },
+	["Top Center"]    = { Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Top },
+	["Top Left"]      = { Enum.HorizontalAlignment.Left,   Enum.VerticalAlignment.Top },
+	["Top Right"]     = { Enum.HorizontalAlignment.Right,  Enum.VerticalAlignment.Top },
+	["Bottom Center"] = { Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Bottom },
+	["Bottom Left"]   = { Enum.HorizontalAlignment.Left,   Enum.VerticalAlignment.Bottom },
+	["Bottom Right"]  = { Enum.HorizontalAlignment.Right,  Enum.VerticalAlignment.Bottom },
 }
-
-function Library:SetNotifyPosition(Position)
-	if not NotifyAlign[Position] then return false end
-	self.NotifyPosition = Position
-	local Alignment = NotifyAlign[Position]
-	NotifyLayout.HorizontalAlignment = Alignment[1]
-	NotifyLayout.VerticalAlignment = Alignment[2]
-	return true
-end
 
 function Library:Notify(Text, Time, Color)
 	Time = Time or 3
-	local A = NotifyAlign[self.NotifyPosition] or NotifyAlign["Top Right"]
+	local A = NotifyAlign[self.NotifyPosition] or NotifyAlign["Top Center"]
 	NotifyLayout.HorizontalAlignment, NotifyLayout.VerticalAlignment = A[1], A[2]
 	local O, F, I = FloatBox(NotifyHolder, NextOrder())
 	New("TextLabel", { AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 14), Text = tostring(Text), TextColor3 = Color or Theme.Text, Parent = F })
@@ -1705,27 +1644,97 @@ function Library:DeleteConfig(Name)
 end
 
 
--- Create an empty UI shell. Consumers build their own tabs, sections and controls
--- through the public Library API (Window, Tab, Section, Toggle, Slider, etc.).
-local Win = Library:Window({
-	Title = "neuro.net",
-	Version = "V3",
-})
-Library.WindowInstance = Win
+function Library:SettingsTab(Win, Opts)
+	Opts = Opts or {}
+	local T = Win:Tab({ Name = Opts.Name or "Settings" })
+	T.IsSettings = true
+	Win:_LayoutTabs()
 
--- Library preference controls belong in Settings; consumers can still add
--- their own tabs and controls without any prebuilt gameplay functionality.
-local SettingsTab = Win:Tab({ Name = "Settings" })
-local GeneralSettings = SettingsTab:Section({ Name = "General", Side = "Left" })
-Library.NotificationPositionControl = GeneralSettings:Dropdown({
-	Name = "Notification Position",
-	Flag = "NotificationPosition",
-	Options = { "Top Left", "Top Right", "Bottom Left", "Bottom Right" },
-	Default = Library.NotifyPosition,
-	Callback = function(Position)
-		Library:SetNotifyPosition(Position)
-	end,
-})
-Library.SettingsTab = SettingsTab
+	local Cfg = T:Section({ Name = "Configs", Side = "Left" })
+	local List = Cfg:List({ Name = "Configs", Height = 250, Options = self:GetConfigs(), Flag = "__ConfigList", Save = false })
+	local NameBox = Cfg:Textbox({ Name = "Config Name", Placeholder = "Enter config name (for Save As)..", Flag = "__ConfigName", Save = false })
+	local function Target()
+		local N = NameBox:Get()
+		if N ~= "" then return N end
+		return List:Get()
+	end
+	local function Refresh() List:SetOptions(self:GetConfigs()) end
+	Cfg:Button({ Name = "Save", Callback = function()
+		local N = Target()
+		if not N then return self:Notify("Select or name a config first", 3) end
+		if self:SaveConfig(N) then self:Notify("Saved config " .. N, 3) end
+		Refresh()
+	end }):Button({ Name = "Load", Callback = function()
+		local N = Target()
+		if N and self:LoadConfig(N) then self:Notify("Loaded config " .. N, 3) else self:Notify("Failed to load config", 3) end
+	end })
+	Cfg:Button({ Name = "[!] Delete", Risky = true, Confirm = true, Callback = function()
+		local N = Target()
+		if N and self:DeleteConfig(N) then self:Notify("Deleted config " .. N, 3) end
+		Refresh()
+	end }):Button({ Name = "Refresh", Callback = Refresh })
+
+	local About = T:Section({ Name = "About", Side = "Left" })
+	About:Separator()
+	About:Label({ Text = Opts.License or "This library is licensed as neuro.net", Centered = true })
+	About:Separator()
+	for _, Line in Opts.Credits or { "- you (backend, frontend [library])" } do
+		About:Label({ Text = Line, Centered = true })
+	end
+
+	local UI = T:Section({ Name = "UI Settings", Side = "Right" })
+	UI:Button({ Name = "Rejoin", Callback = function()
+		TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+	end })
+	UI:Button({ Name = "Server Hop", Callback = function()
+		local Ok, Res = pcall(function()
+			return HttpService:JSONDecode(game:HttpGet(("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100"):format(game.PlaceId)))
+		end)
+		if Ok and Res and Res.data then
+			for _, S in Res.data do
+				if S.id ~= game.JobId and S.playing < S.maxPlayers then
+					return TeleportService:TeleportToPlaceInstance(game.PlaceId, S.id, LocalPlayer)
+				end
+			end
+		end
+		self:Notify("No other servers found", 3)
+	end })
+	UI:Keybind({ Name = "Menu Keybind", Flag = "MenuKeybind", Default = self.MenuKey, NoList = true,
+		Changed = function(K) self.MenuKey = K end })
+
+	local Watermark = self:Watermark({ Title = Win.Opts and Win.Opts.Title, Game = Opts.Game })
+	local Keylist = self:KeybindList()
+	UI:Toggle({ Name = "Show Watermark", Flag = "ShowWatermark", Default = true, Callback = function(V) Watermark:SetVisible(V) end })
+	UI:Toggle({ Name = "Show Keybind List", Flag = "ShowKeybindList", Default = true, Callback = function(V) Keylist:SetVisible(V) end })
+	UI:Dropdown({ Name = "Notification Position", Flag = "NotificationPosition", Default = self.NotifyPosition,
+		Options = { "Top Center", "Top Left", "Top Right", "Bottom Center", "Bottom Left", "Bottom Right" },
+		Callback = function(V) self.NotifyPosition = V end })
+	UI:Slider({ Name = "Tween Time", Flag = "TweenTime", Min = 0, Max = 1, Default = self.TweenTime, Decimals = 1, Suffix = "s",
+		Callback = function(V) self.TweenTime = V end })
+	UI:Slider({ Name = "Rainbow Speed", Flag = "RainbowSpeed", Min = 0, Max = 0.05, Default = self.RainbowSpeed, Decimals = 3,
+		Callback = function(V) self.RainbowSpeed = V end })
+	UI:Separator()
+	UI:Toggle({ Name = "Anti AFK Kick", Flag = "AntiAFK" })
+	UI:Toggle({ Name = "Show ESP Preview", Flag = "ShowESPPreview", Callback = Opts.OnESPPreview })
+	UI:Separator()
+	for _, Pair in { { "Accent Color", "Accent" }, { "Background Color", "Background" }, { "Base Color", "Base" }, { "Outline Color", "Outline" }, { "Text Color", "Text" } } do
+		UI:Colorpicker({ Name = Pair[1], Flag = "Theme_" .. Pair[2], Default = Theme[Pair[2]],
+			Callback = function(C) self:SetTheme(Pair[2], C) end })
+	end
+
+	pcall(function()
+		local VirtualUser = cloneref(game:GetService("VirtualUser"))
+		self:Connect(LocalPlayer.Idled, function()
+			if self.Flags.AntiAFK then
+				VirtualUser:CaptureController()
+				VirtualUser:ClickButton2(Vector2.new())
+			end
+		end)
+	end)
+
+	return T
+end
+
+
 
 return Library
